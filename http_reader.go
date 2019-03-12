@@ -4,14 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 )
 
 type HTTPReader struct {
 	Size     int64
 	Endpoint *url.URL
+	Name     string
 
 	offset int64
 }
@@ -27,10 +30,29 @@ func NewHTTPReader(u *url.URL) (*HTTPReader, error) {
 	if err != nil {
 		return nil, err
 	}
+	name := path.Base(u.Path)
+	if resp.Header.Get("content-disposition") != "" {
+		_, params, err := mime.ParseMediaType(resp.Header.Get("content-disposition"))
+		if err != nil {
+			return nil, err
+		}
+		if params["filename"] != "" {
+			name = params["filename"]
+		}
+	}
 	return &HTTPReader{
 		Size:     size,
 		Endpoint: u,
+		Name:     name,
 	}, nil
+}
+
+func (r *HTTPReader) Dup() *HTTPReader {
+	return &HTTPReader{
+		Size:     r.Size,
+		Endpoint: r.Endpoint,
+		Name:     r.Name,
+	}
 }
 
 func (r *HTTPReader) Seek(offset int64, whence int) (int64, error) {
